@@ -484,7 +484,7 @@ void add_to_page_cache_locked(struct page * page, struct address_space *mapping,
 	if (!PageLocked(page))
 		BUG();
 
-	page_cache_get(page);
+	page_cache_get(page); // 页面使用计数加1
 	spin_lock(&pagecache_lock);
 	page->index = index;
 	add_page_to_inode_queue(mapping, page);

@@ -196,7 +196,7 @@ static struct page * rmqueue(zone_t *zone, unsigned long order)
 			page = expand(zone, page, index, order, curr_order, area);
 			spin_unlock_irqrestore(&zone->lock, flags);
 
-			set_page_count(page, 1);
+			set_page_count(page, 1);	//把页面引用计数设置为1
 			if (BAD_RANGE(zone,page))
 				BUG();
 			DEBUG_ADD_PAGE

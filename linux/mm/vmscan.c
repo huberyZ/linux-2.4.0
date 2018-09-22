@@ -42,7 +42,7 @@ static int try_to_swap_out(struct mm_struct * mm, struct vm_area_struct* vma, un
 	struct page * page;
 	int onlist;
 
-	pte = *page_table;
+	pte = *page_table;		// 获取页表项
 	if (!pte_present(pte))
 		goto out_failed;
 	page = pte_page(pte);
@@ -56,13 +56,13 @@ static int try_to_swap_out(struct mm_struct * mm, struct vm_area_struct* vma, un
 
 	onlist = PageActive(page);
 	/* Don't look at this pte if it's been accessed recently. */
-	if (ptep_test_and_clear_young(page_table)) {
+	if (ptep_test_and_clear_young(page_table)) {	//如果页面在最近(上一次扫描到现在)受到过访问，则增加age
 		age_page_up(page);
 		goto out_failed;
 	}
 	if (!onlist)
 		/* The page is still mapped, so it can't be freeable... */
-		age_page_down_ageonly(page);
+		age_page_down_ageonly(page);	// 对页面进行老化
 
 	/*
 	 * If the page is in active use by us, or if the page
@@ -80,7 +80,7 @@ static int try_to_swap_out(struct mm_struct * mm, struct vm_area_struct* vma, un
 	 * is needed on CPUs which update the accessed and dirty
 	 * bits in hardware.
 	 */
-	pte = ptep_get_and_clear(page_table);
+	pte = ptep_get_and_clear(page_table);  //重新获取页表项，因为引用这个页面的进程, 可能在另一个cpu上对页表项进行更改。
 	flush_tlb_page(vma, address);
 
 	/*

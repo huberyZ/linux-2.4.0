@@ -853,7 +853,7 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct * vma,
 		/* FallThrough */
 	case 1:
 		flush_cache_page(vma, address);
-		establish_pte(vma, address, page_table, pte_mkyoung(pte_mkdirty(pte_mkwrite(pte))));
+		establish_pte(vma, address, page_table, pte_mkyoung(pte_mkdirty(pte_mkwrite(pte))));// pte_mkyoung：设置页面年轻标志位(最近访问标志位), kswapd在下次扫描中会增加这个页面的age
 		spin_unlock(&mm->page_table_lock);
 		return 1;	/* Minor fault */
 	}
@@ -1061,8 +1061,8 @@ static int do_swap_page(struct mm_struct * mm,
 static int do_anonymous_page(struct mm_struct * mm, struct vm_area_struct * vma, pte_t *page_table, int write_access, unsigned long addr)
 {
 	struct page *page = NULL;
-	pte_t entry = pte_wrprotect(mk_pte(ZERO_PAGE(addr), vma->vm_page_prot));
-	if (write_access) {
+	pte_t entry = pte_wrprotect(mk_pte(ZERO_PAGE(addr), vma->vm_page_prot)); // 如果是读操作，则一律映射到同一个物理内存页面empty_zero_page.
+	if (write_access) {    //如果是写，则需要通过alloc_page分配一个页面
 		page = alloc_page(GFP_HIGHUSER);
 		if (!page)
 			return -1;
@@ -1071,7 +1071,7 @@ static int do_anonymous_page(struct mm_struct * mm, struct vm_area_struct * vma,
 		mm->rss++;
 		flush_page_to_ram(page);
 	}
-	set_pte(page_table, entry);
+	set_pte(page_table, entry);		// 把页面设置进指针page_table所指向的页面表项
 	/* No need to invalidate - it was non-present before */
 	update_mmu_cache(vma, addr, entry);
 	return 1;	/* Minor fault */
@@ -1180,7 +1180,7 @@ static inline int handle_pte_fault(struct mm_struct *mm,
 
 		entry = pte_mkdirty(entry);
 	}
-	entry = pte_mkyoung(entry);
+	entry = pte_mkyoung(entry);  // 设置页面年轻标志位(访问标志位), kswapd在下次扫描中会增加这个页面的age
 	establish_pte(vma, address, pte, entry);
 	spin_unlock(&mm->page_table_lock);
 	return 1;
