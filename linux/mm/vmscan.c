@@ -96,7 +96,7 @@ static int try_to_swap_out(struct mm_struct * mm, struct vm_area_struct* vma, un
 		if (pte_dirty(pte))
 			set_page_dirty(page);
 set_swap_pte:
-		swap_duplicate(entry);
+		swap_duplicate(entry);	// 增加盘上页面引用计数
 		set_pte(page_table, swp_entry_to_pte(entry));
 drop_pte:
 		UnlockPage(page);

@@ -74,7 +74,7 @@ static inline int scan_swap_map(struct swap_info_struct *si, unsigned short coun
 			si->lowest_bit++;
 		if (offset == si->highest_bit)
 			si->highest_bit--;
-		si->swap_map[offset] = count;
+		si->swap_map[offset] = count;	// 第一次分配盘上页面，把盘上页面引用计数设置为count(一般为1）
 		nr_swap_pages--;
 		si->cluster_next = offset+1;
 		return offset;

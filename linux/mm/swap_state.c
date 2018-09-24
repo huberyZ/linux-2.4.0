@@ -169,7 +169,7 @@ struct page * lookup_swap_cache(swp_entry_t entry)
 		 * Right now the pagecache is 32-bit only.  But it's a 32 bit index. =)
 		 */
 repeat:
-		found = find_lock_page(&swapper_space, entry.val);	//看看相应的内存页面是否还留在swapper_space的换入/换出队列中尚未最后释放
+		found = find_lock_page(&swapper_space, entry.val);	//看看相应的内存页面是否还留在swapper_space的换入/换出队列中尚未最后释放，页面引用计数加1
 		if (!found)	//已经释放
 			return 0;
 		/*
