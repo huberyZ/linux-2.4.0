@@ -87,19 +87,19 @@ static void __free_pages_ok (struct page *page, unsigned long order)
 	if (PageInactiveClean(page))
 		BUG();
 
-	page->flags &= ~((1<<PG_referenced) | (1<<PG_dirty));
+	page->flags &= ~((1<<PG_referenced) | (1<<PG_dirty));	//清除PG_referenced和PG_dirty位
 	page->age = PAGE_AGE_START;
 	
 	zone = page->zone;
 
 	mask = (~0UL) << order;
-	base = mem_map + zone->offset;
-	page_idx = page - base;
+	base = mem_map + zone->offset;		
+	page_idx = page - base;		//页面在mem_map的偏移，也就是下标
 	if (page_idx & ~mask)
 		BUG();
 	index = page_idx >> (1 + order);
 
-	area = zone->free_area + order;
+	area = zone->free_area + order;  //页面要回收到的free_area
 
 	spin_lock_irqsave(&zone->lock, flags);
 
