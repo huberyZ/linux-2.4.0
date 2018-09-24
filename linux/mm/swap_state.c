@@ -169,8 +169,8 @@ struct page * lookup_swap_cache(swp_entry_t entry)
 		 * Right now the pagecache is 32-bit only.  But it's a 32 bit index. =)
 		 */
 repeat:
-		found = find_lock_page(&swapper_space, entry.val);
-		if (!found)
+		found = find_lock_page(&swapper_space, entry.val);	//看看相应的内存页面是否还留在swapper_space的换入/换出队列中尚未最后释放
+		if (!found)	//已经释放
 			return 0;
 		/*
 		 * Though the "found" page was in the swap cache an instant
@@ -234,6 +234,8 @@ struct page * read_swap_cache_async(swp_entry_t entry, int wait)
 
 	/*
 	 * Check the swap cache again, in case we stalled above.
+	 * 第二次check的原因是，分配内存页面的过程中可能受阻，如果一时分配不到页面，当前进程就会睡眠等待，让别的
+	 * 进程先运行，而当这个进程再次被调度运行时，也许别的进程已经把这个页面读进内存了，所以要在检查一遍cache.
 	 */
 	found_page = lookup_swap_cache(entry);
 	if (found_page)

@@ -168,7 +168,7 @@ void __swap_free(swp_entry_t entry, unsigned short count)
 	if (p->swap_map[offset] < SWAP_MAP_MAX) {
 		if (p->swap_map[offset] < count)
 			goto bad_count;
-		if (!(p->swap_map[offset] -= count)) {
+		if (!(p->swap_map[offset] -= count)) {	//如果该页面的分配（引用)计数为0，这个页面就空闲了，就释放掉(释放磁盘页面的操作实际上并不设计磁盘操作，只是在内存中"账面"上的操作，表示磁盘上那个页面的内容已经作废)
 			if (offset < p->lowest_bit)
 				p->lowest_bit = offset;
 			if (offset > p->highest_bit)
@@ -833,21 +833,21 @@ int swap_duplicate(swp_entry_t entry)
 	/* Swap entry 0 is illegal */
 	if (!entry.val)
 		goto out;
-	type = SWP_TYPE(entry);
+	type = SWP_TYPE(entry);    // 获取交换分区/文件
 	if (type >= nr_swapfiles)
 		goto bad_file;
 	p = type + swap_info;
-	offset = SWP_OFFSET(entry);
+	offset = SWP_OFFSET(entry);		// 获取目标页在交换分区的偏移
 	if (offset >= p->max)
 		goto bad_offset;
-	if (!p->swap_map[offset])
+	if (!p->swap_map[offset])	
 		goto bad_unused;
 	/*
 	 * Entry is valid, so increment the map count.
 	 */
 	swap_device_lock(p);
 	if (p->swap_map[offset] < SWAP_MAP_MAX)
-		p->swap_map[offset]++;
+		p->swap_map[offset]++;		// 增加盘上页面的共享计数
 	else {
 		static int overflow = 0;
 		if (overflow++ < 5)

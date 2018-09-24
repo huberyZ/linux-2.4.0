@@ -1022,7 +1022,7 @@ static int do_swap_page(struct mm_struct * mm,
 	struct page *page = lookup_swap_cache(entry);
 	pte_t pte;
 
-	if (!page) {
+	if (!page) {		//页面已经释放，需要从盘上读进来内容
 		lock_kernel();
 		swapin_readahead(entry);
 		page = read_swap_cache(entry);
@@ -1034,6 +1034,7 @@ static int do_swap_page(struct mm_struct * mm,
 		flush_icache_page(vma, page);
 	}
 
+	// 页面还在swapper_space的换入/换出队列，还没有释放，可以直接使用
 	mm->rss++;
 
 	pte = mk_pte(page, vma->vm_page_prot);
@@ -1044,7 +1045,7 @@ static int do_swap_page(struct mm_struct * mm,
 	 * obtained page count.
 	 */
 	lock_page(page);
-	swap_free(entry);
+	swap_free(entry);	//释放磁盘页面
 	if (write_access && !is_page_shared(page))
 		pte = pte_mkwrite(pte_mkdirty(pte));
 	UnlockPage(page);
@@ -1162,6 +1163,8 @@ static inline int handle_pte_fault(struct mm_struct *mm,
 	 */
 	spin_lock(&mm->page_table_lock);
 	entry = *pte;
+
+	// 页面是否在内存中
 	if (!pte_present(entry)) {
 		/*
 		 * If it truly wasn't present, we know that kswapd
@@ -1169,7 +1172,7 @@ static inline int handle_pte_fault(struct mm_struct *mm,
 		 * drop the lock.
 		 */
 		spin_unlock(&mm->page_table_lock);
-		if (pte_none(entry))
+		if (pte_none(entry))	//页面是否在交换分区, entry为0表示页面映射还未建立
 			return do_no_page(mm, vma, address, write_access, pte);
 		return do_swap_page(mm, vma, address, pte, pte_to_swp_entry(entry), write_access);
 	}

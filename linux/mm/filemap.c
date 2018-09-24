@@ -304,7 +304,7 @@ inside:
 	 * If we end up with too few inactive pages, we wake
 	 * up kswapd.
 	 */
-	age_page_up(page);
+	age_page_up(page);	//增加页面年龄age
 	if (inactive_shortage() > inactive_target / 2 && free_shortage())
 			wakeup_kswapd(0);
 not_found:
@@ -694,7 +694,7 @@ repeat:
 	spin_lock(&pagecache_lock);
 	page = __find_page_nolock(mapping, offset, *hash);
 	if (page) {
-		page_cache_get(page);
+		page_cache_get(page);	//增加页面引用计数
 		spin_unlock(&pagecache_lock);
 
 		lock_page(page);
@@ -704,6 +704,7 @@ repeat:
 			return page;
 
 		/* Nope: we raced. Release and try again.. */
+		//如果page->mapping为null， 则释放这个页面，并重试
 		UnlockPage(page);
 		page_cache_release(page);
 		goto repeat;

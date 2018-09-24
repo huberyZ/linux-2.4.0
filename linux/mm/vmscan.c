@@ -101,8 +101,8 @@ set_swap_pte:
 drop_pte:
 		UnlockPage(page);
 		mm->rss--;
-		deactivate_page(page);
-		page_cache_release(page);
+		deactivate_page(page);    //转移到不活跃队列，age设为0
+		page_cache_release(page);	// 页面引用计数减1，此时引用计数count为2
 out_failed:
 		return 0;
 	}
@@ -141,12 +141,12 @@ out_failed:
 	 * we have the swap cache set up to associate the
 	 * page with that swap entry.
 	 */
-	entry = get_swap_page();
+	entry = get_swap_page();   // 页面第一次使用，没有在交换分区， 所以在盘上分配一个页面，并把这个页面加入swap cache
 	if (!entry.val)
 		goto out_unlock_restore; /* No swap space left */
 
 	/* Add it to the swap cache and mark it dirty */
-	add_to_swap_cache(page, entry);
+	add_to_swap_cache(page, entry);	 //加入到swapper_space，inactive dirty list, 此时count为2
 	set_page_dirty(page);
 	goto set_swap_pte;
 
@@ -559,7 +559,7 @@ dirty_page_rescan:
 			spin_unlock(&pagemap_lru_lock);
 
 			result = writepage(page);
-			page_cache_release(page);
+			page_cache_release(page);	// page引用计数count减1, 到这里，页面的引用计数count为1或2，只有pte在引用
 
 			/* And re-start the thing.. */
 			spin_lock(&pagemap_lru_lock);
