@@ -97,7 +97,7 @@ void __delete_from_swap_cache(struct page *page)
 	swap_cache_del_total++;
 #endif
 	remove_from_swap_cache(page);
-	swap_free(entry);
+	swap_free(entry);		//盘上页面引用计数减1，如果这个盘上页面的引用计数为0，则释放这个盘上页面
 }
 
 /*
