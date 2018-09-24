@@ -101,8 +101,8 @@ set_swap_pte:
 drop_pte:
 		UnlockPage(page);
 		mm->rss--;
-		deactivate_page(page);    //转移到不活跃队列，age设为0
-		page_cache_release(page);	// 页面引用计数减1，此时引用计数count为2
+		deactivate_page(page);    //转移到不活跃队列，age设为0, 此时引用计数为2
+		page_cache_release(page);	// 页面引用计数减1，此时引用计数count为1
 out_failed:
 		return 0;
 	}
@@ -555,11 +555,11 @@ dirty_page_rescan:
 
 			/* OK, do a physical asynchronous write to swap.  */
 			ClearPageDirty(page);
-			page_cache_get(page);
+			page_cache_get(page);	//page引用计数加1
 			spin_unlock(&pagemap_lru_lock);
 
 			result = writepage(page);
-			page_cache_release(page);	// page引用计数count减1, 到这里，页面的引用计数count为1或2，只有pte在引用
+			page_cache_release(page);	// page引用计数count减1
 
 			/* And re-start the thing.. */
 			spin_lock(&pagemap_lru_lock);
