@@ -96,13 +96,13 @@ static int try_to_swap_out(struct mm_struct * mm, struct vm_area_struct* vma, un
 		if (pte_dirty(pte))
 			set_page_dirty(page);
 set_swap_pte:
-		swap_duplicate(entry);	// 增加盘上页面引用计数
+		swap_duplicate(entry);	// 增加盘上页面引用计数,这个引用计数是代表某个进程的pte引用这个盘上页面
 		set_pte(page_table, swp_entry_to_pte(entry));
 drop_pte:
 		UnlockPage(page);
 		mm->rss--;
 		deactivate_page(page);    //转移到不活跃队列，age设为0, 此时引用计数为2
-		page_cache_release(page);	// 页面引用计数减1，此时引用计数count为1
+		page_cache_release(page);	// 页面引用计数减1(解除某个进程的pte对这个页面的引用)，此时引用计数count为1(这时只有缓存队列引用这个页面)
 out_failed:
 		return 0;
 	}
