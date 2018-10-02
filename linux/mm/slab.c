@@ -446,6 +446,11 @@ void __init kmem_cache_sizes_init(void)
 		}
 
 		/* Inc off-slab bufctl limit until the ceiling is hit. */
+		/* 对于CFLGS_OFF_SLAB的对象，要求其管理结构的大小sizeof(slab_t)+num*sizeof(kmem_bufctl_t)小于对象大小
+		 * 因此有sizeof(slab_t)+offslab_limit*sizeof(kmem_bufctl_t)<=sizes->cs_size,
+		 * 又有sizeof(kmem_bufctl_t)=2,所以offslab_limit=(sizes->cs_size-sizeof(slab_t))/2 
+		 *这就是每个CFLGS_OFF_SLAB的slab的对象数的上限.
+		 */
 		if (!(OFF_SLAB(sizes->cs_cachep))) {
 			offslab_limit = sizes->cs_size-sizeof(slab_t);
 			offslab_limit /= 2;
@@ -1114,7 +1119,7 @@ static int kmem_cache_grow (kmem_cache_t * cachep, int flags)
 	offset *= cachep->colour_off;
 	cachep->dflags |= DFLGS_GROWN;
 
-	cachep->growing++;
+	cachep->growing++;			// 思考，这个标志的作用？
 	spin_unlock_irqrestore(&cachep->spinlock, save_flags);
 
 	/* A series of memory allocations for a new slab.
@@ -1375,7 +1380,7 @@ static inline void kmem_cache_free_one(kmem_cache_t *cachep, void *objp)
 		slabp = (void*)((unsigned long)objp&(~(PAGE_SIZE-1)));
 	 else
 	 */
-	slabp = GET_PAGE_SLAB(virt_to_page(objp));
+	slabp = GET_PAGE_SLAB(virt_to_page(objp));	// ?
 
 #if DEBUG
 	if (cachep->flags & SLAB_DEBUG_INITIAL)
@@ -1409,9 +1414,9 @@ static inline void kmem_cache_free_one(kmem_cache_t *cachep, void *objp)
 	STATS_DEC_ACTIVE(cachep);
 	
 	/* fixup slab chain */
-	if (slabp->inuse-- == cachep->num)
+	if (slabp->inuse-- == cachep->num)	//如果这个slab在full slab截，则要移到partial slab截 
 		goto moveslab_partial;
-	if (!slabp->inuse)
+	if (!slabp->inuse)	// 如果释放这个对象后，这个slab中对象全部为free，则把这个slab移到free截
 		goto moveslab_free;
 	return;
 
@@ -1551,7 +1556,7 @@ void * kmalloc (size_t size, int flags)
  * Free an object which was previously allocated from this
  * cache.
  */
-void kmem_cache_free (kmem_cache_t *cachep, void *objp)
+void kmem_cache_free(kmem_cache_t *cachep, void *objp)
 {
 	unsigned long flags;
 #if DEBUG
@@ -1798,10 +1803,10 @@ perfect:
 	for (scan = 0; scan < best_len; scan++) {
 		struct list_head *p;
 
-		if (best_cachep->growing)
+		if (best_cachep->growing)	// 如果这是个正在创建（grow）的slab，则退出
 			break;
 		p = best_cachep->slabs.prev;
-		if (p == &best_cachep->slabs)
+		if (p == &best_cachep->slabs)	//空队列
 			break;
 		slabp = list_entry(p,slab_t,list);
 		if (slabp->inuse)
