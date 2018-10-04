@@ -695,7 +695,7 @@ kmem_cache_create (const char *name, size_t size, size_t offset,
 		align = L1_CACHE_BYTES;
 
 	/* Determine if the slab management is 'on' or 'off' slab. */
-	if (size >= (PAGE_SIZE>>3))
+	if (size >= (PAGE_SIZE>>3))		// 如果对象size大于1/8的page大小，则把slab控制结构单独存放。
 		/*
 		 * Size is large, assume best to place the slab management obj
 		 * off-slab (should allow better packing of objs).
@@ -1062,7 +1062,7 @@ static inline void kmem_cache_init_objs (kmem_cache_t * cachep,
 				BUG();
 		}
 #endif
-		slab_bufctl(slabp)[i] = i+1;
+		slab_bufctl(slabp)[i] = i+1;	// 初始化空闲对象链接数组
 	}
 	slab_bufctl(slabp)[i-1] = BUFCTL_END;
 	slabp->free = 0;
@@ -1143,9 +1143,9 @@ static int kmem_cache_grow (kmem_cache_t * cachep, int flags)
 	i = 1 << cachep->gfporder;
 	page = virt_to_page(objp);
 	do {
-		SET_PAGE_CACHE(page, cachep);
-		SET_PAGE_SLAB(page, slabp);
-		PageSetSlab(page);
+		SET_PAGE_CACHE(page, cachep);	// 设置这个页面所属的slab队列(这样可以通过page获取到kmem_cache_t结构指针)
+		SET_PAGE_SLAB(page, slabp);		// 设置这个页面所属的slab（这样可以通过page获取到slab_t结构指针）
+		PageSetSlab(page);				// 设置这个页面的slab标志位
 		page++;
 	} while (--i);
 
@@ -1224,12 +1224,12 @@ static inline void * kmem_cache_alloc_one_tail (kmem_cache_t *cachep,
 
 	/* get obj pointer */
 	slabp->inuse++;
-	objp = slabp->s_mem + slabp->free*cachep->objsize;
-	slabp->free=slab_bufctl(slabp)[slabp->free];
+	objp = slabp->s_mem + slabp->free*cachep->objsize;	// 定位到要分配的空闲对象
+	slabp->free=slab_bufctl(slabp)[slabp->free];	// 更新下一个free对象
 
 	if (slabp->free == BUFCTL_END)
 		/* slab now full: move to next slab for next alloc */
-		cachep->firstnotfull = slabp->list.next;
+		cachep->firstnotfull = slabp->list.next;	// 如果这个slab满了，则把更新firstnotfull
 #if DEBUG
 	if (cachep->flags & SLAB_POISON)
 		if (kmem_check_poison_obj(cachep, objp))
@@ -1756,6 +1756,8 @@ void kmem_cache_reap (int gfp_mask)
 
 		full_free = 0;
 		p = searchp->slabs.prev;
+
+		// 统计一个slab队列有多少个空闲slab
 		while (p != &searchp->slabs) {
 			slabp = list_entry(p, slab_t, list);
 			if (slabp->inuse)
@@ -1797,7 +1799,7 @@ next:
 		goto out;
 
 	spin_lock_irq(&best_cachep->spinlock);
-perfect:
+perfect:	// 找出空闲最多的slab队列，然后释放80%的空闲slabs
 	/* free only 80% of the free slabs */
 	best_len = (best_len*4 + 1)/5;
 	for (scan = 0; scan < best_len; scan++) {
