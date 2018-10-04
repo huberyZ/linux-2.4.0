@@ -173,10 +173,10 @@ struct vm_struct * get_vm_area(unsigned long size, unsigned long flags)
 	area = (struct vm_struct *) kmalloc(sizeof(*area), GFP_KERNEL);
 	if (!area)
 		return NULL;
-	size += PAGE_SIZE;
+	size += PAGE_SIZE; // 每个区间之间有一个4k的空洞
 	addr = VMALLOC_START;
 	write_lock(&vmlist_lock);
-	for (p = &vmlist; (tmp = *p) ; p = &tmp->next) {
+	for (p = &vmlist; (tmp = *p) ; p = &tmp->next) { //	内核为自己保持一个虚存区间队列vmlist，由一串vm_struct数据结构组成的单链队列.
 		if ((size + addr) < addr) {
 			write_unlock(&vmlist_lock);
 			kfree(area);
