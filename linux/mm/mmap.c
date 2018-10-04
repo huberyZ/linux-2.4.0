@@ -134,7 +134,7 @@ asmlinkage unsigned long sys_brk(unsigned long brk)
 
 	/* Always allow shrinking brk. */
 	if (brk <= mm->brk) {
-		if (!do_munmap(mm, newbrk, oldbrk-newbrk))
+		if (!do_munmap(mm, newbrk, oldbrk-newbrk))   // 释放空间
 			goto set_brk;
 		goto out;
 	}
@@ -225,7 +225,7 @@ unsigned long do_mmap_pgoff(struct file * file, unsigned long addr, unsigned lon
 	if (file != NULL) {
 		switch (flags & MAP_TYPE) {
 		case MAP_SHARED:
-			if ((prot & PROT_WRITE) && !(file->f_mode & FMODE_WRITE))
+			if ((prot & PROT_WRITE) && !(file->f_mode & FMODE_WRITE))	// 映射为可写,但是文件不可写，报错
 				return -EACCES;
 
 			/* Make sure we don't allow writing to an append-only file.. */
@@ -254,7 +254,7 @@ unsigned long do_mmap_pgoff(struct file * file, unsigned long addr, unsigned lon
 		if (addr & ~PAGE_MASK)
 			return -EINVAL;
 	} else {
-		addr = get_unmapped_area(addr, len);
+		addr = get_unmapped_area(addr, len); // 获取一个未映射的空洞区间
 		if (!addr)
 			return -ENOMEM;
 	}
@@ -558,16 +558,16 @@ static struct vm_area_struct * unmap_fixup(struct mm_struct *mm,
 	}
 
 	/* Work out to one of the ends. */
-	if (end == area->vm_end) {
+	if (end == area->vm_end) {	// 如果结束位置正好是area的结束位置，则把area的结束位置调整为要释放地址的开始位置。
 		area->vm_end = addr;
 		lock_vma_mappings(area);
 		spin_lock(&mm->page_table_lock);
-	} else if (addr == area->vm_start) {
+	} else if (addr == area->vm_start) { // 如果待释放地址的开始地址正好是area的开始位置，则把area的开始位置调整为要释放地址的结束地址
 		area->vm_pgoff += (end - area->vm_start) >> PAGE_SHIFT;
 		area->vm_start = end;
 		lock_vma_mappings(area);
 		spin_lock(&mm->page_table_lock);
-	} else {
+	} else {	// 如果待释放区间在area的中间位置，则需要把area分为两个area区间
 	/* Unmapping a hole: area->vm_start < addr <= end < area->vm_end */
 		/* Add end mapping -- leave beginning for below */
 		mpnt = extra;
@@ -594,10 +594,10 @@ static struct vm_area_struct * unmap_fixup(struct mm_struct *mm,
 		 */
 		lock_vma_mappings(area);
 		spin_lock(&mm->page_table_lock);
-		__insert_vm_struct(mm, mpnt);
+		__insert_vm_struct(mm, mpnt);	// 把分割的一个区间插入vm_area_struct 队列
 	}
 
-	__insert_vm_struct(mm, area);
+	__insert_vm_struct(mm, area); // 把分割的区间加入到vm_area_struct 队列
 	spin_unlock(&mm->page_table_lock);
 	unlock_vma_mappings(area);
 	return extra;
@@ -686,12 +686,12 @@ int do_munmap(struct mm_struct *mm, unsigned long addr, size_t len)
 		return 0;
 	/* we have  addr < mpnt->vm_end  */
 
-	if (mpnt->vm_start >= addr+len)
+	if (mpnt->vm_start >= addr+len)		// 没有映射
 		return 0;
 
 	/* If we'll make "hole", check the vm areas limit */
 	if ((mpnt->vm_start < addr && mpnt->vm_end > addr+len)
-	    && mm->map_count >= MAX_MAP_COUNT)
+	    && mm->map_count >= MAX_MAP_COUNT)  //要拆分VMA，则势必要多出一个VMA，看是否超出个数限制
 		return -ENOMEM;
 
 	/*
@@ -705,6 +705,10 @@ int do_munmap(struct mm_struct *mm, unsigned long addr, size_t len)
 	npp = (prev ? &prev->vm_next : &mm->mmap);
 	free = NULL;
 	spin_lock(&mm->page_table_lock);
+
+	/*
+	 * 把要释放的区间链入free队列
+	 */
 	for ( ; mpnt && mpnt->vm_start < addr+len; mpnt = *npp) {
 		*npp = mpnt->vm_next;
 		mpnt->vm_next = free;
@@ -712,6 +716,7 @@ int do_munmap(struct mm_struct *mm, unsigned long addr, size_t len)
 		if (mm->mmap_avl)
 			avl_remove(mpnt, &mm->mmap_avl);
 	}
+
 	mm->mmap_cache = NULL;	/* Kill the cache. */
 	spin_unlock(&mm->page_table_lock);
 
@@ -735,7 +740,7 @@ int do_munmap(struct mm_struct *mm, unsigned long addr, size_t len)
 		if (mpnt->vm_flags & VM_DENYWRITE &&
 		    (st != mpnt->vm_start || end != mpnt->vm_end) &&
 		    (file = mpnt->vm_file) != NULL) {
-			atomic_dec(&file->f_dentry->d_inode->i_writecount);
+			atomic_dec(&file->f_dentry->d_inode->i_writecount);		// ?学完文件系统后可以看这个
 		}
 		remove_shared_vm_struct(mpnt);
 		mm->map_count--;
@@ -800,7 +805,7 @@ unsigned long do_brk(unsigned long addr, unsigned long len)
 	/*
 	 * Clear old maps.  this also does some error checking for us
 	 */
-	retval = do_munmap(mm, addr, len);
+	retval = do_munmap(mm, addr, len); //对于低端不检查是否有冲突，直接解除映射，然后以新建的映射为准
 	if (retval != 0)
 		return retval;
 
@@ -822,11 +827,11 @@ unsigned long do_brk(unsigned long addr, unsigned long len)
 	
 
 	/* Can we just expand an old anonymous mapping? */
-	if (addr) {
+	if (addr) {	 
 		struct vm_area_struct * vma = find_vma(mm, addr-1);
-		if (vma && vma->vm_end == addr && !vma->vm_file && 
+		if (vma && vma->vm_end == addr && !vma->vm_file &&		// 检查是否可以与原来的映射区间合并，即在原有的映射上直接扩展映射区间
 		    vma->vm_flags == flags) {
-			vma->vm_end = addr + len;
+			vma->vm_end = addr + len;	// 直接扩展
 			goto out;
 		}
 	}	
@@ -849,13 +854,13 @@ unsigned long do_brk(unsigned long addr, unsigned long len)
 	vma->vm_file = NULL;
 	vma->vm_private_data = NULL;
 
-	insert_vm_struct(mm, vma);
+	insert_vm_struct(mm, vma);	// 把新建的vma插入队列
 
 out:
 	mm->total_vm += len >> PAGE_SHIFT;
 	if (flags & VM_LOCKED) {
 		mm->locked_vm += len >> PAGE_SHIFT;
-		make_pages_present(addr, addr + len);
+		make_pages_present(addr, addr + len); // 模拟一次缺页异常，建立映射
 	}
 	return addr;
 }
