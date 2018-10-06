@@ -1009,7 +1009,7 @@ void swapin_readahead(swp_entry_t entry)
 		/* Ok, do the async read-ahead now */
 		new_page = read_swap_cache_async(SWP_ENTRY(SWP_TYPE(entry), offset), 0);
 		if (new_page != NULL)
-			page_cache_release(new_page);
+			page_cache_release(new_page);	// 预读进来的页面引用计数减1，因为没有进程引用，此时页面的引用计数为1，在active_list
 		swap_free(SWP_ENTRY(SWP_TYPE(entry), offset));
 	}
 	return;
@@ -1019,7 +1019,7 @@ static int do_swap_page(struct mm_struct * mm,
 	struct vm_area_struct * vma, unsigned long address,
 	pte_t * page_table, swp_entry_t entry, int write_access)
 {
-	struct page *page = lookup_swap_cache(entry);
+	struct page *page = lookup_swap_cache(entry);	// 在swapper_space中查找这个页面
 	pte_t pte;
 
 	if (!page) {		//页面已经释放，需要从盘上读进来内容

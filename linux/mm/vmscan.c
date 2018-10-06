@@ -97,12 +97,16 @@ static int try_to_swap_out(struct mm_struct * mm, struct vm_area_struct* vma, un
 			set_page_dirty(page);
 set_swap_pte:
 		swap_duplicate(entry);	// 增加盘上页面引用计数,这个引用计数是代表某个进程的pte引用这个盘上页面
-		set_pte(page_table, swp_entry_to_pte(entry));
+
+		// 把这个指向盘上页面的索引项置入相应的页面表项，原先对内存页面的映射就变成了对盘上页面的映射
+		set_pte(page_table, swp_entry_to_pte(entry));	
 drop_pte:
 		UnlockPage(page);
 		mm->rss--;
 		deactivate_page(page);    //转移到不活跃队列，age设为0, 此时引用计数为2
-		page_cache_release(page);	// 页面引用计数减1(解除某个进程的pte对这个页面的引用)，此时引用计数count为1(这时只有缓存队列引用这个页面)
+
+		// 页面引用计数减1(解除某个进程的pte对这个页面的引用)，此时引用计数count为1(这时只有缓存队列引用这个页面)
+		page_cache_release(page);	
 out_failed:
 		return 0;
 	}
@@ -428,7 +432,7 @@ struct page * reclaim_page(zone_t * zone)
 		}
 
 		/* OK, remove the page from the caches. */
-                if (PageSwapCache(page)) {
+		if (PageSwapCache(page)) {
 			__delete_from_swap_cache(page);
 			goto found_page;
 		}
@@ -516,6 +520,7 @@ dirty_page_rescan:
 		}
 
 		/* Page is or was in use?  Move it to the active list. */
+		// 这种情况可能因为inactive_dirty_list中的页面，由于缺页异常换入，但是并没有移到active_list(只是增加了age和count), 在这个移到active_list
 		if (PageTestandClearReferenced(page) || page->age > 0 ||
 				(!page->buffers && page_count(page) > 1) ||
 				page_ramdisk(page)) {
@@ -530,9 +535,9 @@ dirty_page_rescan:
 		 */
 		if (TryLockPage(page)) {
 			list_del(page_lru);
-			list_add(page_lru, &inactive_dirty_list);
+			list_add(page_lru, &inactive_dirty_list);	// 如果页面已经上锁，则把这个页面放到队列尾部
 			continue;
-		}
+		} // 如果页面没有上锁，这时已经上锁
 
 		/*
 		 * Dirty swap-cache page? Write it out if
@@ -548,7 +553,7 @@ dirty_page_rescan:
 			/* First time through? Move it to the back of the list */
 			if (!launder_loop) {
 				list_del(page_lru);
-				list_add(page_lru, &inactive_dirty_list);
+				list_add(page_lru, &inactive_dirty_list); // 如果是第一轮扫描，怎不写出，把这个页面放到队列尾部
 				UnlockPage(page);
 				continue;
 			}
@@ -562,6 +567,11 @@ dirty_page_rescan:
 			page_cache_release(page);	// page引用计数count减1
 
 			/* And re-start the thing.. */
+			/*
+			 *	页面在第2轮扫描中写回swapper_space，但并没有
+			 *  立即转到inactive_clean_list，而是等到下一次
+			 *  page_launder时的第一轮扫描中，(第655行)加入到干净队列
+			 */
 			spin_lock(&pagemap_lru_lock);
 			if (result != 1)
 				continue;
@@ -650,6 +660,9 @@ dirty_page_rescan:
 			 * deactivate_page(), we will find it here.
 			 * Now the page is really freeable, so we
 			 * move it to the inactive_clean list.
+			 * 这部分是在第一轮扫描中，把上一次page_launder的
+			 * 第2轮扫描中写回到swapper_space(换入\换出)的页面
+			 * 转到inactive_clean_list
 			 */
 			del_page_from_inactive_dirty_list(page);
 			add_page_to_inactive_clean_list(page);
@@ -679,6 +692,9 @@ page_active:
 	 * We also wake up bdflush, since bdflush should, under most
 	 * loads, flush out the dirty pages before we have to wait on
 	 * IO.
+	 * 如果空闲页面缺少，则进行第二轮扫描，第二轮扫描中会把脏页面
+	 * 写回，但并不转到干净队列，而是等到下一次page_launder的第一轮
+	 * 扫描中转移到干净队列
 	 */
 	if (can_get_io_locks && !launder_loop && free_shortage()) {
 		launder_loop = 1;
@@ -727,10 +743,10 @@ int refill_inactive_scan(unsigned int priority, int oneshot)
 
 		/* Do aging on the pages. */
 		if (PageTestandClearReferenced(page)) {
-			age_page_up_nolock(page);
+			age_page_up_nolock(page);	// 如果页面被引用，则增加页面寿命
 			page_active = 1;
 		} else {
-			age_page_down_ageonly(page);
+			age_page_down_ageonly(page);	// 减少页面寿命
 			/*
 			 * Since we don't hold a reference on the page
 			 * ourselves, we have to do our test a bit more
@@ -741,8 +757,13 @@ int refill_inactive_scan(unsigned int priority, int oneshot)
 			 *
 			 * SUBTLE: we can have buffer pages with count 1.
 			 */
+			 /*
+			  * 页面换入时，会一次性读入多个页面，有的页面没有收到访问，但却在活跃
+			  * 队列(这就是为什么页面在活跃队列，但是count却是1)，这些页面会在这里
+			  * 换出到不活跃队列
+			  */
 			if (page->age == 0 && page_count(page) <=
-						(page->buffers ? 2 : 1)) {
+						(page->buffers ? 2 : 1)) {	
 				deactivate_page_nolock(page);
 				page_active = 0;
 			} else {
@@ -849,7 +870,7 @@ static int refill_inactive(unsigned int gfp_mask, int user)
 	do {
 		made_progress = 0;
 
-		if (current->need_resched) {
+		if (current->need_resched) {	// 扫描前，先检查是否需要调度
 			__set_current_state(TASK_RUNNING);
 			schedule();
 		}
@@ -891,8 +912,8 @@ static int refill_inactive(unsigned int gfp_mask, int user)
 		 * last loop.
 		 */
 		if (!made_progress)
-			priority--;
-	} while (priority >= 0);
+			priority--;	// 逐渐加大力度扫描
+	} while (priority >= 0);	
 
 	/* Always end on a refill_inactive.., may sleep... */
 	while (refill_inactive_scan(0, 1)) {
@@ -924,6 +945,7 @@ static int do_try_to_free_pages(unsigned int gfp_mask, int user)
 	 * If needed, we move pages from the active list
 	 * to the inactive list. We also "eat" pages from
 	 * the inode and dentry cache whenever we do this.
+	 * 如果可分配的物理页面仍然短缺,则要进一步回收页面
 	 */
 	if (free_shortage() || inactive_shortage()) {
 		shrink_dcache_memory(6, gfp_mask);
